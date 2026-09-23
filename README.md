@@ -4,7 +4,7 @@ TypeScript HTTP service that ingests sales and tax payments, accepts sale amendm
 
 ## Prerequisites
 
-- Node.js 20 or later
+- Node.js 20 or later (CI uses Node 24)
 - pnpm (`npm install -g pnpm`, or `corepack enable` if Corepack is available)
 
 ## Start
