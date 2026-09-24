@@ -44,8 +44,9 @@ pnpm lint
 
 GitHub Actions runs both on every push.
 
-- **Unit** (`test/tax.service.spec.ts`) — replay: tax = cost × taxRate, payments, inclusive date filter, past/future dates, amend-before-sale, multiple amendments, no financial-year reset.
-- **E2E** (`test/app.e2e-spec.ts`) — HTTP via the same `bootstrap()` as production: 202/200 happy paths, named 400/503 codes, health, Helmet, Swagger, restart durability.
+- **Tax position** (`test/tax-position.spec.ts`) — worked examples: rounding, payments, the inclusive date, amendments, partial item updates, ingest order, no financial-year reset.
+- **Replay helpers** (`test/replay-tax-position.spec.ts`, `test/iso-date.spec.ts`) — penny rounding, replay order, and which date strings are accepted.
+- **HTTP** (`test/app.e2e-spec.ts`) — the same `bootstrap()` as production: 202/200 paths, named 400/503 codes, health, Helmet, Swagger, restart durability.
 
 ## Layout
 
@@ -158,35 +159,16 @@ Client errors are HTTP 400. `DATABASE_UNAVAILABLE` is HTTP 503.
 
 ## Decisions
 
-- **NestJS.** Controllers, validation, and entities use decorators, so the HTTP contract and the columns sit on the same types. Modules keep each table separate from the code that coordinates ingest, amend, and tax position.
-- **Effective date vs ingest time.** Query `date` filters the event payload `date` (past and future allowed). `BaseDbEntity.id` / `createdAt` only break ties when two events share an effective date.
-- **Inclusive query.** Events with `date` equal to the query date are included. The database filter is `dateEpoch <=` the query instant (ISO offsets included); `date` remains the original payload string.
-- **Upsert, not invoice wipe.** A sale upserts the items it lists. Other items already on that invoice (for example from an earlier amendment) stay. A later sale that includes the same `itemId` overwrites that item from the sale's date.
-- **Items on the event.** Each sale stores its `items` on that event. Replay resolves the current item by `invoiceId` and `itemId`, so an amendment can arrive before a sale and a past date still sees the history.
-- **Amendments before sales.** An amendment creates the item from its own date. If a sale for that item arrives later, replay applies the sale at the sale date.
-- **Rounding.** `Math.round(cost * taxRate)` so the position stays integer pennies.
-- **Negative position.** Overpayment is allowed (payments can exceed sales tax).
-- **Duplicates.** A second ingest is another event, not an idempotent no-op.
-- **No financial years.** The position is a running total of all events on or before the query date.
-- **SQLite + TypeORM.** Events survive a restart. Driver is [sql.js](https://sql.js.org/) (SQLite as WASM) so `pnpm install` needs no C++ toolchain. Schema is a TypeORM migration (`migrationsRun`), not `synchronize`. Entities extend `BaseDbEntity` (`id`, timestamps, `deletedAt`, `metadata`). Soft delete is unused; rows are append-only. `metadata` is `simple-json` because this is not Postgres `jsonb`.
-- **pnpm / Node, not Bun.** NestJS and TypeORM target Node. Reviewers typically have Node.
+Tax position is item tax minus tax payments, for every event whose `date` is on or before the query date. `Math.round(cost * taxRate)` keeps the result in whole pennies. A payment larger than the sales tax makes the position negative. There is no financial-year reset. Ingesting the same payload again stores another event.
+
+The filter uses the event `date`, including that exact instant. Past and future dates are allowed. When two events share a date, `id` and `createdAt` set the order.
+
+A sale writes the items in that request and leaves other items on the invoice alone. An amendment can be stored before the sale; replay follows event date, so a later sale with the same `itemId` replaces that item from the sale date.
+
+Events are rows in SQLite via TypeORM and [sql.js](https://sql.js.org/), so they are still there after a restart. The schema is the migration `InitialTaxLedger1710000000000`. Each row extends `BaseDbEntity` (`id`, timestamps, `deletedAt`, `metadata`).
 
 ## Observability
 
 - HTTP access logs via Nest `Logger('HTTP')`: `method`, `path`, `statusCode`, `durationMs`, `requestId` (`x-request-id` or `x-cloud-trace-context`). Disable with `REQUEST_LOGGING=false`.
 - Nest `Logger` on ingest, amend, and query (event type, invoice id, item counts, computed position).
 - `GET /health` pings the database.
-
-## If we had more time
-
-Not built — the brief is three unauthenticated endpoints on one ledger.
-
-- **Users and tenants** — `userId` on every event; query scoped to the caller.
-- **Authentication and ACL** — JWT plus a route-level access check.
-- **Postgres** — same TypeORM entities; `jsonb` for `metadata`; needed for multiple instances.
-- **Apps split** — `apps/api`, `apps/rpc`, `apps/worker` sharing `packages/tax`. `202` here means persisted in this process.
-- **Queues / Redis** — durable ingest, retries, backpressure.
-- **Financial years / filings** — period close and carried-forward position.
-- **Stronger observability** — OpenTelemetry traces, Prometheus metrics.
-- **Idempotency** — client `Idempotency-Key` so retries do not double-count.
-- **Concurrency** — replicas plus locks or serializable replay. One SQLite file is single-writer.

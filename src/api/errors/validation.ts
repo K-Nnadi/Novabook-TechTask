@@ -8,17 +8,97 @@ interface FlatError {
   message: string;
 }
 
+interface MappedValidationError {
+  code: ErrorCode;
+  issue: string;
+}
+
+/**
+ * class-validator speaks in constraint names. The API speaks in error codes.
+ * The first matching rule wins. Anything else is a generic validation error.
+ */
+const VALIDATION_RULES: {
+  appliesTo: (error: FlatError) => boolean;
+  code: ErrorCode;
+  issue: string | ((error: FlatError) => string);
+}[] = [
+  {
+    appliesTo: (error) => error.constraint === 'isIsoDateTime',
+    code: ErrorCode.INVALID_DATE,
+    issue: 'not_iso8601',
+  },
+  {
+    appliesTo: (error) =>
+      error.constraint === 'isNotEmpty' && fieldEndsWith(error.field, 'date'),
+    code: ErrorCode.MISSING_DATE,
+    issue: 'missing',
+  },
+  {
+    appliesTo: (error) => error.constraint === 'whitelistValidation',
+    code: ErrorCode.VALIDATION_ERROR,
+    issue: 'unexpected_field',
+  },
+  {
+    appliesTo: (error) =>
+      (error.constraint === 'isIn' ||
+        error.constraint === 'isEnum' ||
+        error.constraint === 'equals') &&
+      fieldEndsWith(error.field, 'eventType'),
+    code: ErrorCode.INVALID_EVENT_TYPE,
+    issue: 'invalid_event_type',
+  },
+  {
+    appliesTo: (error) =>
+      (error.constraint === 'isInt' || error.constraint === 'min') &&
+      (fieldEndsWith(error.field, 'cost') ||
+        fieldEndsWith(error.field, 'amount')),
+    code: ErrorCode.INVALID_AMOUNT,
+    issue: (error) =>
+      error.constraint === 'isInt' ? 'not_integer_pennies' : 'negative',
+  },
+  {
+    appliesTo: (error) =>
+      (error.constraint === 'min' || error.constraint === 'isNumber') &&
+      fieldEndsWith(error.field, 'taxRate'),
+    code: ErrorCode.INVALID_TAX_RATE,
+    issue: (error) =>
+      error.constraint === 'min' ? 'negative' : error.constraint,
+  },
+];
+
 export function validationExceptionFactory(
   errors: ValidationError[],
 ): AppHttpException {
   const flat = flatten(errors, '');
-  const details: ErrorDetail[] = flat.map((item) => ({
-    field: item.field,
-    issue: issueFromConstraint(item.constraint, item.field, item.message),
+  const mapped = flat.map(mapValidationError);
+  const details: ErrorDetail[] = mapped.map((item, index) => ({
+    field: flat[index]?.field ?? '',
+    issue: item.issue,
   }));
-  const error = pickErrorCode(flat);
   const message = flat[0]?.message ?? 'Request validation failed';
-  return new AppHttpException(400, error, message, details);
+  return new AppHttpException(400, pickErrorCode(mapped), message, details);
+}
+
+function mapValidationError(error: FlatError): MappedValidationError {
+  const rule = VALIDATION_RULES.find((candidate) => candidate.appliesTo(error));
+  if (!rule) {
+    return {
+      code: ErrorCode.VALIDATION_ERROR,
+      issue: error.constraint || error.message,
+    };
+  }
+  return {
+    code: rule.code,
+    issue: typeof rule.issue === 'function' ? rule.issue(error) : rule.issue,
+  };
+}
+
+function pickErrorCode(mapped: MappedValidationError[]): ErrorCode {
+  const codes = new Set(mapped.map((item) => item.code));
+  if (codes.size === 1) {
+    return [...codes][0] ?? ErrorCode.VALIDATION_ERROR;
+  }
+  return ErrorCode.VALIDATION_ERROR;
 }
 
 function flatten(errors: ValidationError[], prefix: string): FlatError[] {
@@ -35,81 +115,6 @@ function flatten(errors: ValidationError[], prefix: string): FlatError[] {
     }
   }
   return result;
-}
-
-function issueFromConstraint(
-  constraint: string,
-  field: string,
-  message: string,
-): string {
-  if (constraint === 'isIsoDateTime') {
-    return 'not_iso8601';
-  }
-  if (constraint === 'isNotEmpty' && fieldEndsWith(field, 'date')) {
-    return 'missing';
-  }
-  if (constraint === 'whitelistValidation') {
-    return 'unexpected_field';
-  }
-  if (
-    (constraint === 'isIn' ||
-      constraint === 'isEnum' ||
-      constraint === 'equals') &&
-    fieldEndsWith(field, 'eventType')
-  ) {
-    return 'invalid_event_type';
-  }
-  if (
-    (constraint === 'isInt' || constraint === 'min') &&
-    (fieldEndsWith(field, 'cost') || fieldEndsWith(field, 'amount'))
-  ) {
-    return constraint === 'isInt' ? 'not_integer_pennies' : 'negative';
-  }
-  if (constraint === 'min' && fieldEndsWith(field, 'taxRate')) {
-    return 'negative';
-  }
-  return constraint || message;
-}
-
-function pickErrorCode(flat: FlatError[]): ErrorCode {
-  if (flat.length === 0) {
-    return ErrorCode.VALIDATION_ERROR;
-  }
-  const codes = new Set(flat.map((item) => codeFromFlat(item)));
-  if (codes.size === 1) {
-    return [...codes][0] ?? ErrorCode.VALIDATION_ERROR;
-  }
-  return ErrorCode.VALIDATION_ERROR;
-}
-
-function codeFromFlat(item: FlatError): ErrorCode {
-  if (item.constraint === 'isIsoDateTime') {
-    return ErrorCode.INVALID_DATE;
-  }
-  if (item.constraint === 'isNotEmpty' && fieldEndsWith(item.field, 'date')) {
-    return ErrorCode.MISSING_DATE;
-  }
-  if (
-    (item.constraint === 'isIn' ||
-      item.constraint === 'isEnum' ||
-      item.constraint === 'equals') &&
-    fieldEndsWith(item.field, 'eventType')
-  ) {
-    return ErrorCode.INVALID_EVENT_TYPE;
-  }
-  if (
-    (item.constraint === 'isInt' || item.constraint === 'min') &&
-    (fieldEndsWith(item.field, 'cost') || fieldEndsWith(item.field, 'amount'))
-  ) {
-    return ErrorCode.INVALID_AMOUNT;
-  }
-  if (
-    (item.constraint === 'min' || item.constraint === 'isNumber') &&
-    fieldEndsWith(item.field, 'taxRate')
-  ) {
-    return ErrorCode.INVALID_TAX_RATE;
-  }
-  return ErrorCode.VALIDATION_ERROR;
 }
 
 function fieldEndsWith(field: string, suffix: string): boolean {

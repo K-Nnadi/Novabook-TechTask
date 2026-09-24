@@ -4,12 +4,8 @@ import { SaleEventService } from '../../entities/saleEvent/saleEvent.service';
 import { TaxPaymentEventService } from '../../entities/taxPaymentEvent/taxPaymentEvent.service';
 import { EventType } from '../transactions/dto/ingest-transaction.dto';
 import { TaxPositionResponseDto } from './dto/tax-position-response.dto';
-import {
-  compareStoredEvents,
-  StoredTaxEvent,
-  TaxEvent,
-} from './utils/tax-events';
-import { replayTaxPosition } from './utils/taxPosition.calculator';
+import { replayTaxPosition } from './utils/replay-tax-position';
+import { compareForReplay, StoredTaxEvent, TaxEvent } from './utils/tax-event';
 
 @Injectable()
 export class TaxPositionService {
@@ -77,6 +73,6 @@ export class TaxPositionService {
       })),
     ];
 
-    return stored.sort(compareStoredEvents);
+    return stored.sort(compareForReplay);
   }
 }
