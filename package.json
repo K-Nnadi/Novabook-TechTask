@@ -11,6 +11,7 @@
   "scripts": {
     "start": "ts-node src/main.ts",
     "start:dev": "node --watch -r ts-node/register src/main.ts",
+    "db:dump": "ts-node scripts/dump-db.ts",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:e2e": "jest --testPathPattern=e2e",

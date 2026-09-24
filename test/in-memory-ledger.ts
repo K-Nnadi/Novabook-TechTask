@@ -1,10 +1,10 @@
-import { CreateSaleAmendmentInput } from '../src/api/modules/saleAmendment/saleAmendment.service';
-import { SaleAmendment } from '../src/api/modules/saleAmendment/saleAmendment.entity';
+import { CreateSaleAmendmentInput } from '../src/api/modules/entities/saleAmendment/saleAmendment.service';
+import { SaleAmendment } from '../src/api/modules/entities/saleAmendment/saleAmendment.entity';
 import {
   SaleEvent,
   SaleItem,
-} from '../src/api/modules/saleEvent/saleEvent.entity';
-import { TaxPaymentEvent } from '../src/api/modules/taxPaymentEvent/taxPaymentEvent.entity';
+} from '../src/api/modules/entities/saleEvent/saleEvent.entity';
+import { TaxPaymentEvent } from '../src/api/modules/entities/taxPaymentEvent/taxPaymentEvent.entity';
 
 class MemoryLedger<T extends { id: number; createdAt: Date; date: string }> {
   private nextId = 1;

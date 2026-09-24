@@ -1,9 +1,9 @@
-import { SaleAmendmentService } from '../src/api/modules/saleAmendment/saleAmendment.service';
-import { SaleEventService } from '../src/api/modules/saleEvent/saleEvent.service';
-import { TaxPaymentEventService } from '../src/api/modules/taxPaymentEvent/taxPaymentEvent.service';
-import { TaxPositionService } from '../src/api/orchestration/taxPosition/taxPosition.service';
-import { EventType } from '../src/api/orchestration/transactions/dto/ingest-transaction.dto';
-import { TransactionsService } from '../src/api/orchestration/transactions/transactions.service';
+import { SaleAmendmentService } from '../src/api/modules/entities/saleAmendment/saleAmendment.service';
+import { SaleEventService } from '../src/api/modules/entities/saleEvent/saleEvent.service';
+import { TaxPaymentEventService } from '../src/api/modules/entities/taxPaymentEvent/taxPaymentEvent.service';
+import { TaxPositionService } from '../src/api/modules/orchestration/taxPosition/taxPosition.service';
+import { EventType } from '../src/api/modules/orchestration/transactions/dto/ingest-transaction.dto';
+import { TransactionsService } from '../src/api/modules/orchestration/transactions/transactions.service';
 import {
   InMemorySaleAmendmentService,
   InMemorySaleEventService,
