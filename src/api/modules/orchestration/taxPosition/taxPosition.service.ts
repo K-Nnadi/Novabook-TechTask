@@ -2,9 +2,13 @@ import { Injectable, Logger } from '@nestjs/common';
 import { SaleAmendmentService } from '../../entities/saleAmendment/saleAmendment.service';
 import { SaleEventService } from '../../entities/saleEvent/saleEvent.service';
 import { TaxPaymentEventService } from '../../entities/taxPaymentEvent/taxPaymentEvent.service';
-import { TaxPositionResponseDto } from './dto/tax-position-response.dto';
 import { EventType } from '../transactions/dto/ingest-transaction.dto';
-import { compareStoredEvents, StoredTaxEvent } from './utils/tax-events';
+import { TaxPositionResponseDto } from './dto/tax-position-response.dto';
+import {
+  compareStoredEvents,
+  StoredTaxEvent,
+  TaxEvent,
+} from './utils/tax-events';
 import { replayTaxPosition } from './utils/taxPosition.calculator';
 
 @Injectable()
@@ -46,7 +50,7 @@ export class TaxPositionService {
           date: row.date,
           invoiceId: row.invoiceId,
           items: row.items,
-        },
+        } satisfies TaxEvent,
       })),
       ...payments.map((row) => ({
         id: row.id,
@@ -56,7 +60,7 @@ export class TaxPositionService {
           kind: EventType.TAX_PAYMENT,
           date: row.date,
           amount: row.amount,
-        },
+        } satisfies TaxEvent,
       })),
       ...amendments.map((row) => ({
         id: row.id,
@@ -69,7 +73,7 @@ export class TaxPositionService {
           itemId: row.itemId,
           cost: row.cost,
           taxRate: row.taxRate,
-        },
+        } satisfies TaxEvent,
       })),
     ];
 
